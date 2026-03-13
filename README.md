@@ -5,35 +5,40 @@
 [![Code License](https://img.shields.io/badge/Code%20License-GPLv2-blue.svg)](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html)
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-Follow%20%40iammelvink-blue.svg?style=social&logo=linkedin)](https://www.linkedin.com/in/iammelvink)
 
-## Overview
+## Overview: My little Debugger
 
-This is the codebase produced for the Project course
 
-Written in **Placeholder**
 
-1. Methodologies/Project Management:
 
-   - Agile
+This is the codebase produced for the Project course.
 
-2. Coding Practices:
+**My Little Debugger** is an Interactive AI Debugging Assistant designed to help programmers identify and fix errors in their code more easily. Debugging can often be time-consuming and frustrating, especially for beginner developers who struggle to understand compiler errors, runtime exceptions, and logical mistakes.
 
-   - OOP (Object Oriented Programming)
-   - MVC (Model View Controller)
+The system analyzes code errors, simplifies explanations, and suggests possible solutions through an interactive chat-based interface supported by an animated avatar.
 
-3. Programming Languages/Frameworks:
+---
 
-   - Placeholder
+## Methodologies / Project Management
 
-## Instructions
+* Agile
 
-1. Make sure you have these installed
 
-2. Clone `ONLY THE LATEST COMMIT` of this repository into your local machine using the terminal (mac) or
-   [Gitbash (PC)](https://git-scm.com/download/win 'Gitbash (PC)') `to save storage space`
 
-   ```sh
-   git clone https://github.com/iammelvink/NPRT63.git --depth=1
-   ```
+## Coding Practices
+
+* Object Oriented Programming (OOP)
+* Model View Controller (MVC)
+
+
+
+## Programming Languages / Frameworks
+
+* Python
+* Java
+* C#
+
+
+
 
 ## Author(s)
 
@@ -41,7 +46,13 @@ Written in **Placeholder**
 
 [Melvin Kisten](https://github.com/iammelvink 'Melvin Kisten\'s GitHub page')
 
-GitHub: @"Group members"
+Ashley van Wyk Github: https://github.com/ashleykiaravanwyk-collab
+
+Zein Neels Github: https://github.com/zeinulneels5-byte
+
+Mustaqiem Voster Github: https://github.com/WhatTheDemmet
+
+Tsholofelo Machwisa Github:https://github.com/AbutiTsholo
 
 LinkedIn: [Melvin Kisten](https://www.linkedin.com/in/iammelvink 'Melvin Kisten\'s LinkedIn page')
 
