@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Save, Sparkles, Moon, Sun, GraduationCap, Bell, UserCircle2 } from 'lucide-react';
 import { updateCurrentUserProfileRequest, getCurrentUserRequest } from '../api';
-import { store } from '../store';
+import { store, type UserPreferences } from '../store';
 
 export default function Settings() {
   const currentUser = store.getCurrentUser();
@@ -9,40 +9,55 @@ export default function Settings() {
     name: currentUser?.name ?? '',
     email: currentUser?.email ?? '',
   });
-  const [settings, setSettings] = useState({
-    avatarStyle: 'friendly',
-    themeMode: 'light',
-    learningMode: 'beginner',
-    notifications: true
-  });
+  const [settings, setSettings] = useState<UserPreferences>(() => store.getSettings());
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [saveError, setSaveError] = useState('');
 
   useEffect(() => {
     void getCurrentUserRequest().then((user) => {
       setProfile({ name: user.name, email: user.email });
       store.updateCurrentUser({
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role === 'admin' ? 'Administrator' : 'Standard User',
       });
-    }).catch(() => {
-      // If the backend is unavailable, preserve the current local profile state.
+    }).catch((error: unknown) => {
+      setSaveError(error instanceof Error ? error.message : 'Unable to load your profile.');
     });
   }, []);
 
   const handleSave = async () => {
+    const name = profile.name.trim();
+    const email = profile.email.trim();
+    if (!name) {
+      setSaveState('idle');
+      setSaveError('Name is required.');
+      return;
+    }
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      setSaveState('idle');
+      setSaveError('Enter a valid email address.');
+      return;
+    }
+
+    setSaveError('');
     setSaveState('saving');
     try {
-      const user = await updateCurrentUserProfileRequest(profile.name, profile.email);
+      const user = await updateCurrentUserProfileRequest(name, email);
       store.updateCurrentUser({
+        id: user.id,
         name: user.name,
         email: user.email,
         role: user.role === 'admin' ? 'Administrator' : 'Standard User',
       });
+      store.setSettings(settings);
+      setProfile({ name: user.name, email: user.email });
       setSaveState('saved');
       setTimeout(() => setSaveState('idle'), 1500);
-    } catch {
+    } catch (error) {
       setSaveState('idle');
+      setSaveError(error instanceof Error ? error.message : 'Unable to save settings.');
     }
   };
 
@@ -92,7 +107,7 @@ export default function Settings() {
                 name="avatar"
                 value="friendly"
                 checked={settings.avatarStyle === 'friendly'}
-                onChange={(e) => setSettings({ ...settings, avatarStyle: e.target.value })}
+                onChange={() => setSettings({ ...settings, avatarStyle: 'friendly' })}
                 className="w-4 h-4 text-purple-600"
               />
               <div className="w-10 h-10 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center">
@@ -110,7 +125,7 @@ export default function Settings() {
                 name="avatar"
                 value="professional"
                 checked={settings.avatarStyle === 'professional'}
-                onChange={(e) => setSettings({ ...settings, avatarStyle: e.target.value })}
+                onChange={() => setSettings({ ...settings, avatarStyle: 'professional' })}
                 className="w-4 h-4 text-purple-600"
               />
               <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-cyan-400 rounded-full flex items-center justify-center">
@@ -169,7 +184,7 @@ export default function Settings() {
           </h3>
           <select
             value={settings.learningMode}
-            onChange={(e) => setSettings({ ...settings, learningMode: e.target.value })}
+            onChange={(e) => setSettings({ ...settings, learningMode: e.target.value as UserPreferences['learningMode'] })}
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
           >
             <option value="beginner">Beginner - Detailed explanations</option>
@@ -204,12 +219,18 @@ export default function Settings() {
         </div>
 
         {/* Save Button */}
+        {saveError && (
+          <p role="alert" className="text-sm text-red-700" aria-live="polite">
+            {saveError}
+          </p>
+        )}
         <button
           onClick={handleSave}
-          className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2"
+          disabled={saveState === 'saving'}
+          className="w-full py-4 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl font-medium hover:shadow-lg transition-all flex items-center justify-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
         >
           <Save className="w-5 h-5" />
-          Save Settings
+          {saveState === 'saving' ? 'Saving...' : saveState === 'saved' ? 'Saved' : 'Save Settings'}
         </button>
       </div>
     </div>

@@ -5,14 +5,28 @@ import { Loader2, Sparkles } from 'lucide-react';
 import { getAnalysisJobRequest, getAnalysisResultRequest, runAnalysisRequest } from '../api';
 import { store } from '../store';
 
+const ANALYSIS_TIMEOUT_MS = 30_000;
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  let timeoutId: number | undefined;
+  const timeout = new Promise<T>((_resolve, reject) => {
+    timeoutId = window.setTimeout(() => reject(new Error('Analysis timed out after 30 seconds.')), timeoutMs);
+  });
+  return Promise.race([promise, timeout]).finally(() => {
+    if (timeoutId !== undefined) window.clearTimeout(timeoutId);
+  });
+}
+
 export default function AnalyzeCode() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
 
     async function analyze() {
+      setError('');
       const currentFile = store.getCurrentFile();
       if (!currentFile) {
         navigate('/dashboard/upload', { replace: true });
@@ -20,16 +34,26 @@ export default function AnalyzeCode() {
       }
 
       try {
-        const job = await runAnalysisRequest(currentFile.id);
+        const deadline = Date.now() + ANALYSIS_TIMEOUT_MS;
+        const job = await withTimeout(runAnalysisRequest(currentFile.id), ANALYSIS_TIMEOUT_MS);
         let currentJob = job;
-        for (let attempt = 0; attempt < 20 && currentJob.status !== 'completed' && currentJob.status !== 'failed'; attempt += 1) {
-          await new Promise((resolve) => window.setTimeout(resolve, 250));
-          currentJob = await getAnalysisJobRequest(job.id);
+        while (currentJob.status !== 'completed' && currentJob.status !== 'failed') {
+          const remaining = deadline - Date.now();
+          if (remaining <= 0) throw new Error('Analysis timed out after 30 seconds.');
+          await new Promise((resolve) => window.setTimeout(resolve, Math.min(500, remaining)));
+          if (cancelled) return;
+          currentJob = await withTimeout(getAnalysisJobRequest(job.id), deadline - Date.now());
         }
+        if (cancelled) return;
         if (currentJob.status === 'failed') {
           throw new Error(currentJob.result_summary || 'Analysis failed.');
         }
-        const result = await getAnalysisResultRequest(currentFile.id);
+        const remaining = deadline - Date.now();
+        if (remaining <= 0) throw new Error('Analysis timed out after 30 seconds.');
+        const result = await withTimeout(getAnalysisResultRequest(currentFile.id), remaining);
+        if (result.status !== 'completed') {
+          throw new Error(result.status === 'failed' ? 'Analysis failed.' : 'Analysis did not complete. Please retry.');
+        }
         if (!cancelled) {
           store.updateCurrentFile({
             errorCount: result.error_count,
@@ -48,7 +72,32 @@ export default function AnalyzeCode() {
     return () => {
       cancelled = true;
     };
-  }, [navigate]);
+  }, [navigate, retryCount]);
+
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh] px-4">
+        <div className="text-center max-w-lg">
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">Analysis didn’t finish</h2>
+          <p role="alert" className="text-red-600 mb-6">{error}</p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <button
+              onClick={() => setRetryCount((count) => count + 1)}
+              className="px-5 py-3 bg-purple-600 text-white rounded-xl hover:bg-purple-700"
+            >
+              Retry
+            </button>
+            <button
+              onClick={() => navigate('/dashboard/upload')}
+              className="px-5 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50"
+            >
+              Back to Upload
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-[60vh]">
@@ -62,8 +111,6 @@ export default function AnalyzeCode() {
         </motion.div>
 
         <h2 className="text-2xl font-bold text-gray-900 mb-4">Analyzing Your Code</h2>
-
-        {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
         <div className="bg-purple-50 rounded-2xl p-6 max-w-md mx-auto">
           <div className="flex items-center gap-3">

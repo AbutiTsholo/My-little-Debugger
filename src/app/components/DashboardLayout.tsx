@@ -9,6 +9,7 @@ import {
   LogOut,
   Shield,
   Sparkles,
+  GraduationCap,
   Menu,
   X
 } from 'lucide-react';
@@ -19,8 +20,22 @@ export default function DashboardLayout() {
   const location = useLocation();
   const [showLogoutModal, setShowLogoutModal] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const user = store.getCurrentUser();
-  const isAdmin = store.isAdmin();
+  const [user, setUser] = useState(() => store.getCurrentUser());
+  const [avatarStyle, setAvatarStyle] = useState(() => store.getSettings().avatarStyle);
+  const isAdmin = user?.role === 'Administrator';
+
+  useEffect(() => {
+    const syncUser = () => {
+      setUser(store.getCurrentUser());
+      setAvatarStyle(store.getSettings().avatarStyle);
+    };
+    window.addEventListener('debugging-app-user-updated', syncUser);
+    window.addEventListener('debugging-app-preferences-updated', syncUser);
+    return () => {
+      window.removeEventListener('debugging-app-user-updated', syncUser);
+      window.removeEventListener('debugging-app-preferences-updated', syncUser);
+    };
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -62,7 +77,9 @@ export default function DashboardLayout() {
         <div className="p-6 border-b border-white/20">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-white/20 rounded-xl flex items-center justify-center">
-              <Sparkles className="w-6 h-6 text-white" />
+              {avatarStyle === 'professional'
+                ? <GraduationCap className="w-6 h-6 text-white" />
+                : <Sparkles className="w-6 h-6 text-white" />}
             </div>
             <div className="text-white">
               <div className="font-bold">{user?.name}</div>
@@ -124,10 +141,6 @@ export default function DashboardLayout() {
           <Outlet />
         </main>
 
-        {/* Debug Buddy Avatar - Always visible */}
-        <div className="fixed bottom-6 right-6 w-16 h-16 bg-gradient-to-br from-purple-400 to-pink-400 rounded-full flex items-center justify-center shadow-lg cursor-pointer hover:scale-110 transition-transform">
-          <Sparkles className="w-8 h-8 text-white" />
-        </div>
       </div>
 
       {/* Logout Modal */}

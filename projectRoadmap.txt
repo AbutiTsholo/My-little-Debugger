@@ -418,3 +418,26 @@ overbuilding too early.
 If you want, I can turn this into:
 1. a detailed execution plan with sprint-by-sprint tasks, or
 2. a full technical architecture diagram and schema plan for this app.
+__________________________________________________________________________
+
+Open two terminals.
+
+**Terminal 1: backend**
+```powershell
+cd C:\Users\Admin\Downloads\DebuggingApp\backend
+C:\Users\Admin\.anaconda-desktop\micromamba\envs\assistant\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+```
+
+**Terminal 2: frontend**
+```powershell
+cd C:\Users\Admin\Downloads\DebuggingApp
+npm run dev -- --host 127.0.0.1 --port 5173
+```
+
+Then open:
+
+```text
+http://127.0.0.1:5173
+```
+
+Stop either server with `Ctrl+C`.

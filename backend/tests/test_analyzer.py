@@ -38,11 +38,29 @@ def test_java_missing_semicolon_returns_finding() -> None:
         Finding(
             line=2,
             message="Missing semicolon or statement terminator.",
-            suggestion="Add the required terminator at the end of the line.",
+            suggestion="Add a semicolon: `int value = 1;`",
             severity="error",
             rule="jvm.missing-terminator",
         )
     ]
+
+
+def test_jvm_analyzer_ignores_comments_annotations_and_multiline_statements() -> None:
+    source = """// comment without a terminator
+/* block comment
+ * continuation of comment
+ */
+@Override
+public void run() {
+  int value =
+      calculate(
+          2,
+          3
+      );
+}
+"""
+
+    assert analyze_source(source, "Java") == []
 
 
 def test_csharp_unmatched_opening_brace_returns_finding() -> None:

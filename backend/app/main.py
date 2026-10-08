@@ -7,7 +7,7 @@ from redis.exceptions import RedisError
 from sqlalchemy.orm import Session
 
 from .config import settings
-from .ai import ChatContext, ChatTurn, get_assistant_provider
+from .ai import ChatContext, ChatFinding, ChatTurn, get_assistant_provider
 from .analyzer import analyze_source
 from .db import Base, SessionLocal, engine, get_db
 from .models import AnalysisRun, AuditLog, ChatMessageModel, ChatSession, ErrorFindingModel, Project, Report, UploadedFile, User
@@ -406,9 +406,12 @@ def run_analysis(
     db.add(run)
     db.commit()
     db.refresh(run)
-    try:
-        enqueue_analysis(run.id)
-    except RedisError:
+    if settings.use_queue:
+        try:
+            enqueue_analysis(run.id)
+        except RedisError:
+            background_tasks.add_task(process_analysis, run.id)
+    else:
         background_tasks.add_task(process_analysis, run.id)
 
     return AnalysisJobOut(id=run.id, file_id=file_id, status=run.status, result_summary=run.result_summary)
@@ -585,13 +588,20 @@ def get_chat_context(file_id: int | None, db: Session, current_user: User) -> Ch
     latest_run = db.query(AnalysisRun).filter(
         AnalysisRun.file_id == file_record.id,
     ).order_by(AnalysisRun.id.desc()).first()
-    finding_count = db.query(ErrorFindingModel).filter(
+    finding_records = db.query(ErrorFindingModel).filter(
         ErrorFindingModel.run_id == latest_run.id,
-    ).count() if latest_run else 0
+    ).order_by(ErrorFindingModel.line.asc()).all() if latest_run else []
     return ChatContext(
+        file_id=file_record.id,
         filename=file_record.filename,
         language=file_record.language,
-        finding_count=finding_count,
+        finding_count=len(finding_records),
+        content=file_record.content[:4000],
+        findings=[
+            ChatFinding(line=finding.line, message=finding.message, suggestion=finding.suggestion)
+            for finding in finding_records
+        ],
+        analysis_status=latest_run.status if latest_run else None,
     )
 
 
@@ -675,25 +685,6 @@ def create_chat_message(
 
 @app.post("/api/v1/chat/messages", response_model=ChatMessageOut)
 def chat_message(payload: ChatMessageCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
-    context = None
-    if payload.file_id is not None:
-        file_record = db.query(UploadedFile).join(Project).filter(
-            UploadedFile.id == payload.file_id,
-            Project.owner_id == current_user.id,
-        ).first()
-        if not file_record:
-            raise HTTPException(status_code=404, detail="File not found")
-
-        latest_run = db.query(AnalysisRun).filter(
-            AnalysisRun.file_id == file_record.id,
-        ).order_by(AnalysisRun.id.desc()).first()
-        finding_count = db.query(ErrorFindingModel).filter(
-            ErrorFindingModel.run_id == latest_run.id,
-        ).count() if latest_run else 0
-        context = ChatContext(
-            filename=file_record.filename,
-            language=file_record.language,
-            finding_count=finding_count,
-        )
+    context = get_chat_context(payload.file_id, db, current_user)
     message = get_assistant_provider().respond(payload.message, context, explanation_mode=payload.explanation_mode)
     return ChatMessageOut(id=0, role="assistant", message=message)

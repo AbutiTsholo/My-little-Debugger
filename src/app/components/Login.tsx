@@ -62,10 +62,6 @@ export default function Login() {
           </div>
         )}
 
-        <div className="mb-4 rounded-xl bg-purple-50 px-4 py-3 text-xs text-purple-700">
-          Demo admin access: <span className="font-semibold">202304366@spu.ac.za</span> / <span className="font-semibold">Spu@123</span>
-        </div>
-
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label htmlFor="loginEmail" className="block text-sm font-medium text-gray-700 mb-2">

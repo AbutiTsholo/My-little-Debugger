@@ -7,7 +7,7 @@ import {
   sendChatMessageRequest,
   sendChatSessionMessageRequest,
 } from '../api';
-import { store } from '../store';
+import { store, type ExplanationMode } from '../store';
 
 interface Message {
   id: string;
@@ -27,8 +27,9 @@ export default function ChatAssistant() {
   ]);
   const [inputText, setInputText] = useState('');
   const [sessionId, setSessionId] = useState<number | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [explanationMode, setExplanationMode] = useState<'beginner' | 'intermediate' | 'advanced'>('beginner');
+  const [sessionFileId, setSessionFileId] = useState<number | null>(null);
+  const [isSending, setIsSending] = useState(false);
+  const [explanationMode, setExplanationMode] = useState<ExplanationMode>(() => store.getExplanationMode());
 
   useEffect(() => {
     let cancelled = false;
@@ -39,9 +40,11 @@ export default function ChatAssistant() {
           currentFile ? `Debugging ${currentFile.fileName}` : 'Debugging session',
           currentFile?.id,
         );
-        const history = await getChatMessagesRequest(session.id);
         if (cancelled) return;
         setSessionId(session.id);
+        setSessionFileId(currentFile ? Number(currentFile.id) : null);
+        const history = await getChatMessagesRequest(session.id);
+        if (cancelled) return;
         if (history.length > 0) {
           setMessages(history.map((message) => ({
             id: message.id.toString(),
@@ -51,9 +54,10 @@ export default function ChatAssistant() {
           })));
         }
       } catch {
-        // Keep the local welcome message when the API is unavailable.
-      } finally {
-        if (!cancelled) setIsLoading(false);
+        if (!cancelled) {
+          setSessionId(null);
+          setSessionFileId(null);
+        }
       }
     }
     void loadSession();
@@ -68,13 +72,20 @@ export default function ChatAssistant() {
     { icon: Zap, text: 'Optimize Code', color: 'green' },
     { icon: AlertCircle, text: 'Why Did This Fail?', color: 'red' }
   ];
+  const actionStyles: Record<string, { button: string; icon: string }> = {
+    purple: { button: 'border-purple-200 hover:border-purple-400', icon: 'text-purple-600' },
+    blue: { button: 'border-blue-200 hover:border-blue-400', icon: 'text-blue-600' },
+    green: { button: 'border-green-200 hover:border-green-400', icon: 'text-green-600' },
+    red: { button: 'border-red-200 hover:border-red-400', icon: 'text-red-600' },
+  };
 
   const handleQuickAction = (action: string) => {
     sendMessage(action);
   };
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || isSending) return;
+    setIsSending(true);
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -87,36 +98,51 @@ export default function ChatAssistant() {
     setInputText('');
 
     try {
-      const response = sessionId
-        ? await sendChatSessionMessageRequest(sessionId, text, explanationMode)
-        : await sendChatMessageRequest(text, store.getCurrentFile()?.id, explanationMode);
+      let currentFile = store.getCurrentFile();
+      if (currentFile) {
+        try {
+          await store.refreshCurrentFileAnalysis(currentFile.id);
+        } catch (error) {
+          if (!(error instanceof ApiRequestError && error.status === 404)) throw error;
+        }
+        currentFile = store.getCurrentFile();
+      }
+      const currentFileId = currentFile ? Number(currentFile.id) : null;
+      let activeSessionId = sessionId;
+      if (activeSessionId !== null && sessionFileId !== currentFileId) {
+        try {
+          const session = await createChatSessionRequest(
+            currentFile ? `Debugging ${currentFile.fileName}` : 'Debugging session',
+            currentFile?.id,
+          );
+          activeSessionId = session.id;
+          setSessionId(session.id);
+          setSessionFileId(currentFileId);
+        } catch {
+          activeSessionId = null;
+          setSessionId(null);
+          setSessionFileId(null);
+        }
+      }
+      const response = activeSessionId !== null
+        ? await sendChatSessionMessageRequest(activeSessionId, text, explanationMode)
+        : await sendChatMessageRequest(text, currentFile?.id, explanationMode);
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(),
         text: response.message,
         sender: 'buddy',
         timestamp: new Date(),
       }]);
-      return;
     } catch (error) {
-      if (error instanceof ApiRequestError) return;
-    }
-
-    // Keep the prototype response available when the API is offline.
-    const responses: Record<string, string> = {
-        'Explain Error': "Based on your code, I found a syntax error on line 3. In Java, every statement must end with a semicolon (;). This is a common mistake for beginners! The semicolon tells Java where one statement ends and another begins.",
-        'Fix This': "Here's how to fix it:\n\n1. Go to line 3 in your code\n2. Add a semicolon at the end: int x = 10;\n3. Save your file\n4. Run it again!\n\nWould you like me to explain why semicolons are important?",
-        'Optimize Code': "Your code looks good! Here are some tips:\n\n• Consider adding comments to explain complex logic\n• Use meaningful variable names\n• Break long methods into smaller functions\n• Add error handling for user input",
-        'Why Did This Fail?': "Your code failed because of a syntax error. Java is a compiled language, which means it checks all the syntax rules before running. When it found the missing semicolon, it stopped and reported an error. Think of it like writing a sentence - you need proper punctuation for it to make sense!"
-    };
-
-      const buddyMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        text: responses[text] || "I understand you're asking about: " + text + ". Let me help you with that! Could you provide more details about what you'd like to know?",
+      setMessages(prev => [...prev, {
+        id: `error-${Date.now()}`,
+        text: "Debug Buddy couldn't reach the server - try again",
         sender: 'buddy',
-        timestamp: new Date()
-      };
-
-    setMessages(prev => [...prev, buddyMessage]);
+        timestamp: new Date(),
+      }]);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -148,7 +174,11 @@ export default function ChatAssistant() {
               <span>Explanation level</span>
               <select
                 value={explanationMode}
-                onChange={(event) => setExplanationMode(event.target.value as typeof explanationMode)}
+                onChange={(event) => {
+                  const mode = event.target.value as ExplanationMode;
+                  setExplanationMode(mode);
+                  store.setExplanationMode(mode);
+                }}
                 className="px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
               >
                 <option value="beginner">Beginner</option>
@@ -162,9 +192,9 @@ export default function ChatAssistant() {
               <button
                 key={action.text}
                 onClick={() => handleQuickAction(action.text)}
-                className={`flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:shadow-md transition-all border border-${action.color}-200 hover:border-${action.color}-400`}
+                className={`flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:shadow-md transition-all border ${actionStyles[action.color].button}`}
               >
-                <action.icon className={`w-4 h-4 text-${action.color}-600`} />
+                <action.icon className={`w-4 h-4 ${actionStyles[action.color].icon}`} />
                 <span className="text-sm font-medium text-gray-700">{action.text}</span>
               </button>
             ))}
@@ -200,6 +230,17 @@ export default function ChatAssistant() {
               </div>
             </div>
           ))}
+          {isSending && (
+            <div className="flex justify-start" role="status" aria-live="polite">
+              <div className="max-w-[80%] rounded-2xl bg-gray-100 text-gray-900 p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Sparkles className="w-4 h-4 text-purple-600" />
+                  <span className="font-medium text-sm text-purple-600">Debug Buddy</span>
+                </div>
+                <p>typing...</p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Input */}
@@ -214,7 +255,7 @@ export default function ChatAssistant() {
             />
             <button
               type="submit"
-              disabled={isLoading || !inputText.trim()}
+              disabled={isSending}
               className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
             >
               <Send className="w-5 h-5" />

@@ -3,8 +3,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     app_name: str = "Debugging App API"
-    database_url: str = "sqlite:///./debugging_app.db"
+    database_url: str = "sqlite:///./data/debugging_app.db"
     redis_url: str = "redis://localhost:6379/0"
+    use_queue: bool = False
     secret_key: str = "change-me-in-production"
     access_token_expire_minutes: int = 60
     demo_admin_email: str = "202304366@spu.ac.za"
