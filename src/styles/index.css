@@ -1,3 +1,249 @@
-@import './fonts.css';
-@import './tailwind.css';
-@import './theme.css';
+@import "./fonts.css";
+@import "./tailwind.css";
+@import "./theme.css";
+
+.panel {
+  background: white;
+  border: 1px solid #e8e4ee;
+  border-radius: 16px;
+  padding: 24px;
+  box-shadow: 0 3px 12px #29134c08;
+}
+.panel h1 {
+  font-size: 1.6rem;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+.panel h2 {
+  font-size: 1.2rem;
+  font-weight: 650;
+  margin-bottom: 8px;
+}
+.muted {
+  color: #61566e;
+  font-size: 0.9rem;
+  margin: 8px 0;
+}
+.field {
+  display: block;
+  width: 100%;
+  border: 1px solid #cfc5da;
+  background: white;
+  color: #20162d;
+  border-radius: 9px;
+  padding: 10px 12px;
+  margin-top: 6px;
+}
+.field:focus {
+  outline: 2px solid #9333ea;
+  outline-offset: 1px;
+}
+.button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border-radius: 10px;
+  background: #7e22ce;
+  color: white;
+  padding: 10px 16px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.button.secondary {
+  color: #5b2188;
+  background: #f5effb;
+  border: 1px solid #dfcdec;
+}
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.code-input {
+  font-family: Consolas, monospace;
+  font-size: 14px;
+  tab-size: 4;
+  white-space: pre;
+  overflow: auto;
+}
+.code-block {
+  background: #21182e;
+  color: #f2eaf8;
+  padding: 16px;
+  border-radius: 10px;
+  white-space: pre;
+  overflow: auto;
+  font-size: 14px;
+}
+.drop-zone {
+  border: 2px dashed #b48acb;
+  padding: 24px;
+  text-align: center;
+  border-radius: 12px;
+  background: #faf5ff;
+}
+.error-message {
+  color: #a12132;
+  background: #fff1f3;
+  border-radius: 8px;
+  padding: 12px;
+}
+.chat-message {
+  border-radius: 14px;
+  background: #f4f0f8;
+  padding: 16px;
+  margin-right: 8%;
+}
+.chat-user {
+  background: #eee1fd;
+  margin-left: 8%;
+  margin-right: 0;
+}
+.learning-item {
+  padding: 15px;
+  border-left: 3px solid #9333ea;
+  border-radius: 5px;
+  background: #faf7fd;
+}
+th,
+td {
+  padding: 12px;
+  border-bottom: 1px solid #e8e4ee;
+}
+.buddy {
+  position: relative;
+  margin-top: 24px;
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-end;
+  gap: 12px;
+}
+.buddy-card {
+  width: 230px;
+  background: white;
+  border: 1px solid #dcc4ef;
+  box-shadow: 0 3px 12px #29134c15;
+  border-radius: 15px;
+  padding: 14px;
+}
+.buddy-face {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: linear-gradient(140deg, #9333ea, #ec4899);
+  color: white;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 4px 16px #7e22ce35;
+}
+.buddy-face svg {
+  animation: buddy-breathe 4s ease-in-out infinite;
+}
+.checking .buddy-face svg {
+  animation-duration: 1s;
+}
+@keyframes buddy-breathe {
+  50% {
+    transform: translateY(-5px) rotate(4deg);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+.dark .panel,
+.dark .buddy-card,
+.dark .field {
+  background: #21192e;
+  color: #eee7f5;
+  border-color: #4b3a60;
+}
+.dark .muted {
+  color: #bfb0d1;
+}
+.dark .learning-item,
+.dark .chat-message,
+.dark .drop-zone,
+.dark .button.secondary {
+  background: #31203f;
+  color: #e5d0f7;
+}
+.dark .chat-user {
+  background: #432959;
+}
+@media print {
+  .no-print,
+  header,
+  nav,
+  button {
+    display: none !important;
+  }
+  body,
+  main {
+    background: white !important;
+    color: black !important;
+  }
+  main {
+    padding: 0 !important;
+    overflow: visible !important;
+  }
+  .panel {
+    box-shadow: none;
+    border: none;
+  }
+  .learning-item {
+    break-inside: avoid;
+  }
+}
+
+/* Keep tinted panels readable in dark mode. */
+html.dark .bg-purple-50,
+html.dark .bg-purple-100 {
+  background-color: #352347;
+}
+html.dark .text-purple-900,
+html.dark .text-purple-800,
+html.dark .text-purple-700 {
+  color: #e9d5ff;
+}
+html.dark .bg-green-50,
+html.dark .bg-green-100 {
+  background-color: #173c30;
+}
+html.dark .text-green-900,
+html.dark .text-green-800,
+html.dark .text-green-700 {
+  color: #bbf7d0;
+}
+html.dark .bg-blue-50,
+html.dark .bg-blue-100 {
+  background-color: #203553;
+}
+html.dark .text-blue-900,
+html.dark .text-blue-800,
+html.dark .text-blue-700 {
+  color: #bfdbfe;
+}
+html.dark .bg-red-50,
+html.dark .bg-red-100 {
+  background-color: #49252c;
+}
+html.dark .text-red-900,
+html.dark .text-red-800,
+html.dark .text-red-700 {
+  color: #fecaca;
+}
+@media print {
+  html.dark .print-report,
+  html.dark .print-report * {
+    background: white !important;
+    color: black !important;
+  }
+}
+
+@import "./redesign.css";

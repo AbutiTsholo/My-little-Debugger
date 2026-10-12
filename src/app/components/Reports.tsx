@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { store } from '../store';
 import { createReportRequest } from '../api';
-import { FileDown, Save, ArrowLeft, FileText, CheckCircle, AlertCircle, Lightbulb } from 'lucide-react';
+import { FileDown, Save, ArrowLeft, FileText, CheckCircle, AlertCircle, Info, Lightbulb } from 'lucide-react';
+import { dominantFindingSeverity, findingSeverityPresentation } from '../findingSeverity';
 
 export default function Reports() {
   const navigate = useNavigate();
@@ -27,7 +28,7 @@ export default function Reports() {
           filename: currentFile.fileName,
           language: currentFile.language,
           status: currentFile.status,
-          errorCount: currentFile.errorCount,
+          findingCounts: currentFile.findingCounts,
           errors: currentFile.errors,
         }),
       );
@@ -59,6 +60,10 @@ export default function Reports() {
     );
   }
 
+  const { errors, warnings, informational, total } = currentFile.findingCounts;
+  const severity = dominantFindingSeverity(currentFile.findingCounts);
+  const presentation = severity ? findingSeverityPresentation[severity] : null;
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Header */}
@@ -74,7 +79,7 @@ export default function Reports() {
         <div>
           <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
             <FileText className="w-6 h-6 text-purple-600" />
-            Error Summary
+            Finding Summary
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="bg-purple-50 rounded-xl p-4">
@@ -85,18 +90,14 @@ export default function Reports() {
               <div className="text-2xl font-bold text-blue-900">{currentFile.language}</div>
               <div className="text-sm text-blue-700">Language</div>
             </div>
-            <div className={`rounded-xl p-4 ${
-              currentFile.errorCount === 0 ? 'bg-green-50' : 'bg-red-50'
-            }`}>
-              <div className={`text-2xl font-bold ${
-                currentFile.errorCount === 0 ? 'text-green-900' : 'text-red-900'
-              }`}>
-                {currentFile.errorCount}
+            <div className={`rounded-xl p-4 ${presentation?.surface ?? 'bg-green-50'}`}>
+              <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm font-semibold text-gray-900">
+                <span>{errors} errors</span>
+                <span>{warnings} warnings</span>
+                <span>{informational} info</span>
               </div>
-              <div className={`text-sm ${
-                currentFile.errorCount === 0 ? 'text-green-700' : 'text-red-700'
-              }`}>
-                Error{currentFile.errorCount !== 1 ? 's' : ''} Found
+              <div className="text-sm text-gray-700 mt-1">
+                {total} total finding{total === 1 ? '' : 's'}
               </div>
             </div>
           </div>
@@ -116,30 +117,32 @@ export default function Reports() {
             </div>
             <div className="flex justify-between">
               <span className="text-gray-600">Status:</span>
-              <span className={`font-medium ${
-                currentFile.errorCount === 0 ? 'text-green-600' : 'text-red-600'
-              }`}>
+              <span className={`font-medium ${presentation?.message ?? 'text-green-700'}`}>
                 {currentFile.status}
               </span>
             </div>
           </div>
         </div>
 
-        {/* Errors & Fixes */}
+        {/* Findings & Fixes */}
         {currentFile.errors.length > 0 ? (
           <div>
             <h3 className="text-lg font-bold text-gray-900 mb-4 flex items-center gap-2">
-              <AlertCircle className="w-6 h-6 text-red-600" />
-              Detected Errors & Suggested Fixes
+              {severity === 'info'
+                ? <Info className="w-6 h-6 text-blue-600" />
+                : <AlertCircle className={`w-6 h-6 ${presentation?.icon ?? 'text-red-600'}`} />}
+              Findings & Suggested Fixes
             </h3>
             <div className="space-y-4">
-              {currentFile.errors.map((error, index) => (
+              {currentFile.errors.map((error, index) => {
+                const findingPresentation = findingSeverityPresentation[error.severity];
+                return (
                 <div key={index} className="border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="bg-red-50 p-4 border-l-4 border-red-500">
+                  <div className={`p-4 border-l-4 ${findingPresentation.surface} ${findingPresentation.border}`}>
                     <div className="font-medium text-gray-900 mb-1">
-                      Error #{index + 1} - Line {error.line}
+                      {findingPresentation.label} #{index + 1} - Line {error.line}
                     </div>
-                    <div className="text-red-700">{error.message}</div>
+                    <div className={findingPresentation.message}>{error.message}</div>
                   </div>
                   <div className="bg-green-50 p-4 border-l-4 border-green-500">
                     <div className="flex items-start gap-2">
@@ -151,7 +154,8 @@ export default function Reports() {
                     </div>
                   </div>
                 </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         ) : (
@@ -161,7 +165,7 @@ export default function Reports() {
               <div>
                 <div className="font-bold text-green-900 mb-1">Excellent Work!</div>
                 <div className="text-green-800">
-                  No errors detected in your code. Keep up the great work!
+                  No findings detected in your code. Keep up the great work!
                 </div>
               </div>
             </div>

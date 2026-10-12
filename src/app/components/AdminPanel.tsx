@@ -10,6 +10,7 @@ import {
   type ApiUser,
 } from '../api';
 import { Shield, Users, FileCode, TrendingUp, Activity, Lock, ArrowLeft, AlertTriangle } from 'lucide-react';
+import { dominantFindingSeverity, findingSeverityPresentation, formatFindingCounts } from '../findingSeverity';
 
 export default function AdminPanel() {
   const navigate = useNavigate();
@@ -129,7 +130,7 @@ export default function AdminPanel() {
             </div>
           </div>
           <div className="text-2xl font-bold text-gray-900">
-            {allFiles.reduce((sum, f) => sum + f.errorCount, 0)}
+            {allFiles.reduce((sum, file) => sum + file.findingCounts.errors, 0)}
           </div>
           <div className="text-sm text-gray-600">Total Errors Detected</div>
         </div>
@@ -178,7 +179,10 @@ export default function AdminPanel() {
           <p className="text-gray-600 text-center py-8">No files have been uploaded yet.</p>
         ) : (
           <div className="space-y-2">
-            {allFiles.map((file) => (
+            {allFiles.map((file) => {
+              const severity = dominantFindingSeverity(file.findingCounts);
+              const presentation = severity ? findingSeverityPresentation[severity] : null;
+              return (
               <div
                 key={file.id}
                 className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
@@ -193,14 +197,13 @@ export default function AdminPanel() {
                   </div>
                 </div>
                 <span className={`text-sm px-2 py-1 rounded ${
-                  file.errorCount === 0
-                    ? 'bg-green-100 text-green-700'
-                    : 'bg-red-100 text-red-700'
+                  presentation?.badge ?? 'bg-green-100 text-green-700'
                 }`}>
-                  {file.errorCount} errors
+                  {formatFindingCounts(file.findingCounts)}
                 </span>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

@@ -4,6 +4,7 @@ import { motion } from 'motion/react';
 import { Loader2, Sparkles } from 'lucide-react';
 import { getAnalysisJobRequest, getAnalysisResultRequest, runAnalysisRequest } from '../api';
 import { store } from '../store';
+import { countFindings, normalizeFindings } from '../findingSeverity';
 
 const ANALYSIS_TIMEOUT_MS = 30_000;
 
@@ -55,10 +56,11 @@ export default function AnalyzeCode() {
           throw new Error(result.status === 'failed' ? 'Analysis failed.' : 'Analysis did not complete. Please retry.');
         }
         if (!cancelled) {
+          const findings = normalizeFindings(result.errors);
           store.updateCurrentFile({
-            errorCount: result.error_count,
-            status: result.error_count === 0 ? 'Clean' : 'Errors Found',
-            errors: result.errors,
+            findingCounts: countFindings(findings),
+            status: findings.length === 0 ? 'Clean' : 'Findings Found',
+            errors: findings,
           });
           navigate('/dashboard/error-analysis');
         }

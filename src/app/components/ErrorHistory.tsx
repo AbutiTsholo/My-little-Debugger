@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router';
 import { store } from '../store';
-import { FileCode, Calendar, AlertCircle, CheckCircle, Eye } from 'lucide-react';
+import { FileCode, Calendar, AlertCircle, CheckCircle, Eye, Info } from 'lucide-react';
+import { dominantFindingSeverity, findingSeverityPresentation, formatFindingCounts } from '../findingSeverity';
 
 export default function ErrorHistory() {
   const navigate = useNavigate();
@@ -41,7 +42,11 @@ export default function ErrorHistory() {
         </div>
       ) : (
         <div className="space-y-4">
-          {files.map((file) => (
+          {files.map((file) => {
+            const severity = dominantFindingSeverity(file.findingCounts);
+            const presentation = severity ? findingSeverityPresentation[severity] : null;
+            const StatusIcon = severity === 'info' ? Info : severity ? AlertCircle : CheckCircle;
+            return (
             <div
               key={file.id}
               className="bg-white rounded-xl p-6 shadow-md hover:shadow-lg transition-all"
@@ -49,11 +54,9 @@ export default function ErrorHistory() {
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-4">
                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                    file.errorCount === 0 ? 'bg-green-100' : 'bg-red-100'
+                    presentation?.surface ?? 'bg-green-100'
                   }`}>
-                    <FileCode className={`w-6 h-6 ${
-                      file.errorCount === 0 ? 'text-green-600' : 'text-red-600'
-                    }`} />
+                    <FileCode className={`w-6 h-6 ${presentation?.icon ?? 'text-green-600'}`} />
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-900">{file.fileName}</h3>
@@ -72,21 +75,10 @@ export default function ErrorHistory() {
 
                 <div className="flex items-center gap-4">
                   <div className={`px-4 py-2 rounded-xl font-medium flex items-center gap-2 ${
-                    file.errorCount === 0
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-red-100 text-red-700'
+                    presentation?.badge ?? 'bg-green-100 text-green-700'
                   }`}>
-                    {file.errorCount === 0 ? (
-                      <>
-                        <CheckCircle className="w-5 h-5" />
-                        Clean
-                      </>
-                    ) : (
-                      <>
-                        <AlertCircle className="w-5 h-5" />
-                        {file.errorCount} Error{file.errorCount > 1 ? 's' : ''}
-                      </>
-                    )}
+                    <StatusIcon className="w-5 h-5" />
+                    {formatFindingCounts(file.findingCounts)}
                   </div>
 
                   <button
@@ -99,24 +91,31 @@ export default function ErrorHistory() {
                 </div>
               </div>
 
-              {/* Error Preview */}
+              {/* Finding Preview */}
               {file.errors.length > 0 && (
-                <div className="bg-red-50 rounded-xl p-4 border border-red-200">
-                  <p className="text-sm text-red-900 font-medium mb-2">Error Summary:</p>
-                  {file.errors.slice(0, 2).map((error: any, index: number) => (
-                    <div key={index} className="text-sm text-red-800 mb-1">
-                      • Line {error.line}: {error.message}
+                <div className="bg-gray-50 rounded-xl p-4 border border-gray-200">
+                  <p className="text-sm text-gray-900 font-medium mb-2">Finding Summary:</p>
+                  {file.errors.slice(0, 2).map((finding, index) => {
+                    const findingPresentation = findingSeverityPresentation[finding.severity];
+                    return (
+                    <div key={index} className={`text-sm mb-1 ${findingPresentation.message}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${findingPresentation.badge}`}>
+                        {findingPresentation.label}
+                      </span>{' '}
+                      Line {finding.line}: {finding.message}
                     </div>
-                  ))}
+                    );
+                  })}
                   {file.errors.length > 2 && (
-                    <p className="text-sm text-red-700 mt-2">
-                      + {file.errors.length - 2} more error{file.errors.length - 2 > 1 ? 's' : ''}
+                    <p className="text-sm text-gray-700 mt-2">
+                      + {file.errors.length - 2} more finding{file.errors.length - 2 > 1 ? 's' : ''}
                     </p>
                   )}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -11,6 +11,12 @@ import {
   setAuthToken,
   hasAuthToken,
 } from './api';
+import {
+  countFindings,
+  normalizeFindings,
+  type FindingSeverity,
+  type FindingSeverityCounts,
+} from './findingSeverity';
 
 type UserRole = 'Administrator' | 'Standard User';
 export type ExplanationMode = 'beginner' | 'intermediate' | 'advanced';
@@ -34,13 +40,14 @@ interface AnalyzedFile {
   fileName: string;
   language: string;
   uploadDate: string;
-  errorCount: number;
+  findingCounts: FindingSeverityCounts;
   status: string;
   code: string;
   errors: Array<{
     line: number;
     message: string;
     suggestion: string;
+    severity: FindingSeverity;
   }>;
 }
 
@@ -55,6 +62,11 @@ interface LegacyStoredAppState extends Partial<StoredAppState> {
   themeMode?: UserPreferences['themeMode'];
   learningMode?: ExplanationMode;
   notifications?: boolean;
+}
+
+function normalizeAnalyzedFile(file: AnalyzedFile): AnalyzedFile {
+  const errors = normalizeFindings(file.errors ?? []);
+  return { ...file, errors, findingCounts: countFindings(errors) };
 }
 
 class AppStore {
@@ -80,8 +92,11 @@ class AppStore {
 
       const parsed = JSON.parse(raw) as LegacyStoredAppState;
       this.currentUser = hasAuthToken() ? parsed.currentUser ?? null : null;
-      this.analyzedFiles = parsed.analyzedFiles ?? [];
-      this.currentFile = parsed.currentFile ?? null;
+      this.analyzedFiles = (parsed.analyzedFiles ?? []).map(normalizeAnalyzedFile);
+      this.currentFile = parsed.currentFile
+        ? this.analyzedFiles.find((file) => file.id === parsed.currentFile?.id)
+          ?? normalizeAnalyzedFile(parsed.currentFile)
+        : null;
       if (this.currentUser) this.loadUserPreferences(this.currentUser, parsed);
       else this.resetUserPreferences();
     } catch {
@@ -285,9 +300,10 @@ class AppStore {
     return this.currentUser?.role === 'Administrator';
   }
 
-  addAnalyzedFile(file: AnalyzedFile): void {
-    this.analyzedFiles.unshift(file);
-    this.currentFile = file;
+  addAnalyzedFile(file: Omit<AnalyzedFile, 'findingCounts'>): void {
+    const normalizedFile = normalizeAnalyzedFile({ ...file, findingCounts: countFindings(file.errors) });
+    this.analyzedFiles.unshift(normalizedFile);
+    this.currentFile = normalizedFile;
     this.persist();
   }
 
@@ -300,7 +316,7 @@ class AppStore {
   }
 
   setCurrentFile(file: AnalyzedFile): void {
-    this.currentFile = file;
+    this.currentFile = normalizeAnalyzedFile(file);
     this.persist();
   }
 
@@ -316,10 +332,10 @@ class AppStore {
             fileName: file.filename,
             language: file.language,
             uploadDate: 'Stored session',
-            errorCount: result.error_count,
-            status: result.status === 'completed' ? (result.error_count ? 'Errors Found' : 'Clean') : file.status,
+            findingCounts: countFindings(result.errors),
+            status: result.status === 'completed' ? (result.errors.length ? 'Findings Found' : 'Clean') : file.status,
             code: file.content,
-            errors: result.errors,
+            errors: normalizeFindings(result.errors),
           };
         } catch {
           return {
@@ -327,7 +343,7 @@ class AppStore {
             fileName: file.filename,
             language: file.language,
             uploadDate: 'Stored session',
-            errorCount: 0,
+            findingCounts: countFindings([]),
             status: file.status,
             code: file.content,
             errors: [],
@@ -347,7 +363,7 @@ class AppStore {
 
   updateCurrentFile(update: Partial<AnalyzedFile>): void {
     if (!this.currentFile) return;
-    this.currentFile = { ...this.currentFile, ...update };
+    this.currentFile = normalizeAnalyzedFile({ ...this.currentFile, ...update });
     this.analyzedFiles = this.analyzedFiles.map((file) =>
       file.id === this.currentFile?.id ? this.currentFile : file,
     );
@@ -362,11 +378,11 @@ class AppStore {
     if (result.file_id !== Number(fileId) || this.currentFile?.id !== fileId) return;
 
     this.updateCurrentFile({
-      errorCount: result.error_count,
+      findingCounts: countFindings(result.errors),
       status: result.status === 'completed'
-        ? result.error_count === 0 ? 'Clean' : 'Errors Found'
+        ? result.errors.length === 0 ? 'Clean' : 'Findings Found'
         : result.status,
-      errors: result.errors,
+      errors: normalizeFindings(result.errors),
     });
   }
 }

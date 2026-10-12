@@ -1,269 +1,489 @@
-import { useEffect, useState } from 'react';
-import { Send, Sparkles, HelpCircle, Wrench, Zap, AlertCircle } from 'lucide-react';
+import { useEffect, useRef, useState } from "react";
+import {
+  Send,
+  Sparkles,
+  HelpCircle,
+  Wrench,
+  Zap,
+  AlertCircle,
+  RotateCcw,
+} from "lucide-react";
 import {
   ApiRequestError,
   createChatSessionRequest,
   getChatMessagesRequest,
-  sendChatMessageRequest,
+  getChatSessionsRequest,
   sendChatSessionMessageRequest,
-} from '../api';
-import { store, type ExplanationMode } from '../store';
+  type ApiChatSession,
+} from "../api";
+import { store, type ExplanationMode } from "../store";
 
 interface Message {
   id: string;
   text: string;
-  sender: 'user' | 'buddy';
+  sender: "user" | "buddy";
   timestamp: Date;
 }
 
-export default function ChatAssistant() {
+const SESSION_STORAGE_KEY = "debug-buddy-active-session-id";
+
+const defaultWelcomeMessage =
+  "Hi! I'm Debug Buddy, a rule-based programming assistant. I can explain code, diagnose likely bugs, suggest fixes, and keep your conversation history in the database.";
+
+const quickActions = [
+  { icon: HelpCircle, text: "Explain Error", color: "purple" },
+  { icon: Wrench, text: "Fix This", color: "blue" },
+  { icon: Zap, text: "Optimize Code", color: "green" },
+  { icon: AlertCircle, text: "Why Did This Fail?", color: "red" },
+];
+
+export default function ChatAssistant({
+  embedded = false,
+}: {
+  embedded?: boolean;
+}) {
+  const thread = useRef<HTMLDivElement>(null);
+  const [showAbout, setShowAbout] = useState(false);
   const [messages, setMessages] = useState<Message[]>([
     {
-      id: '1',
-      text: "Hi! I'm Debug Buddy, your friendly AI assistant. How can I help you with your code today?",
-      sender: 'buddy',
-      timestamp: new Date()
-    }
+      id: "welcome",
+      text: defaultWelcomeMessage,
+      sender: "buddy",
+      timestamp: new Date(),
+    },
   ]);
-  const [inputText, setInputText] = useState('');
-  const [sessionId, setSessionId] = useState<number | null>(null);
-  const [sessionFileId, setSessionFileId] = useState<number | null>(null);
+  const [inputText, setInputText] = useState("");
+  const [activeSessionId, setActiveSessionId] = useState<number | null>(null);
+  const [sessionList, setSessionList] = useState<ApiChatSession[]>([]);
   const [isSending, setIsSending] = useState(false);
-  const [explanationMode, setExplanationMode] = useState<ExplanationMode>(() => store.getExplanationMode());
+  const [isLoadingSessions, setIsLoadingSessions] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [explanationMode, setExplanationMode] = useState<ExplanationMode>(() =>
+    store.getExplanationMode(),
+  );
+
+  const syncStoredSession = (sessionId: number | null) => {
+    if (sessionId === null) {
+      localStorage.removeItem(SESSION_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(SESSION_STORAGE_KEY, String(sessionId));
+  };
+
+  const loadSessionHistory = async (sessionId: number) => {
+    const history = await getChatMessagesRequest(sessionId);
+    setMessages(
+      history.length > 0
+        ? history.map((message) => ({
+            id: message.id.toString(),
+            text: message.message,
+            sender: message.role === "user" ? "user" : "buddy",
+            timestamp: new Date(),
+          }))
+        : [
+            {
+              id: "welcome",
+              text: defaultWelcomeMessage,
+              sender: "buddy",
+              timestamp: new Date(),
+            },
+          ],
+    );
+  };
 
   useEffect(() => {
     let cancelled = false;
-    async function loadSession() {
-      const currentFile = store.getCurrentFile();
+
+    async function loadExistingSessions() {
+      setIsLoadingSessions(true);
       try {
-        const session = await createChatSessionRequest(
-          currentFile ? `Debugging ${currentFile.fileName}` : 'Debugging session',
-          currentFile?.id,
-        );
+        const sessions = await getChatSessionsRequest();
         if (cancelled) return;
-        setSessionId(session.id);
-        setSessionFileId(currentFile ? Number(currentFile.id) : null);
-        const history = await getChatMessagesRequest(session.id);
-        if (cancelled) return;
-        if (history.length > 0) {
-          setMessages(history.map((message) => ({
-            id: message.id.toString(),
-            text: message.message,
-            sender: message.role === 'user' ? 'user' : 'buddy',
-            timestamp: new Date(),
-          })));
+        setSessionList(sessions);
+
+        const cachedSessionId =
+          Number(localStorage.getItem(SESSION_STORAGE_KEY) ?? "0") || null;
+        const matchingStored = embedded
+          ? (sessions.find(
+              (session) =>
+                session.file_id === Number(store.getCurrentFile()?.id),
+            )?.id ?? null)
+          : cachedSessionId &&
+              sessions.some((session) => session.id === cachedSessionId)
+            ? cachedSessionId
+            : (sessions[0]?.id ?? null);
+
+        if (matchingStored) {
+          setActiveSessionId(matchingStored);
+          syncStoredSession(matchingStored);
+          const history = await getChatMessagesRequest(matchingStored);
+          if (cancelled) return;
+          setMessages(
+            history.length > 0
+              ? history.map((message) => ({
+                  id: message.id.toString(),
+                  text: message.message,
+                  sender: message.role === "user" ? "user" : "buddy",
+                  timestamp: new Date(),
+                }))
+              : [
+                  {
+                    id: "welcome",
+                    text: defaultWelcomeMessage,
+                    sender: "buddy",
+                    timestamp: new Date(),
+                  },
+                ],
+          );
         }
       } catch {
         if (!cancelled) {
-          setSessionId(null);
-          setSessionFileId(null);
+          setErrorMessage("I could not load your saved conversations.");
         }
+      } finally {
+        if (!cancelled) setIsLoadingSessions(false);
       }
     }
-    void loadSession();
+
+    void loadExistingSessions();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [embedded]);
 
-  const quickActions = [
-    { icon: HelpCircle, text: 'Explain Error', color: 'purple' },
-    { icon: Wrench, text: 'Fix This', color: 'blue' },
-    { icon: Zap, text: 'Optimize Code', color: 'green' },
-    { icon: AlertCircle, text: 'Why Did This Fail?', color: 'red' }
-  ];
-  const actionStyles: Record<string, { button: string; icon: string }> = {
-    purple: { button: 'border-purple-200 hover:border-purple-400', icon: 'text-purple-600' },
-    blue: { button: 'border-blue-200 hover:border-blue-400', icon: 'text-blue-600' },
-    green: { button: 'border-green-200 hover:border-green-400', icon: 'text-green-600' },
-    red: { button: 'border-red-200 hover:border-red-400', icon: 'text-red-600' },
-  };
+  useEffect(() => {
+    if (thread.current) thread.current.scrollTop = thread.current.scrollHeight;
+  }, [messages, isSending]);
 
   const handleQuickAction = (action: string) => {
-    sendMessage(action);
+    void sendMessage(action);
+  };
+
+  const ensureSession = async () => {
+    let sessionId = activeSessionId;
+    if (sessionId !== null) return sessionId;
+
+    const currentFile = store.getCurrentFile();
+    const created = await createChatSessionRequest(
+      currentFile ? `Debugging ${currentFile.fileName}` : "Debugging session",
+      currentFile?.id,
+    );
+    setSessionList((previous) => [created, ...previous]);
+    setActiveSessionId(created.id);
+    syncStoredSession(created.id);
+    return created.id;
+  };
+
+  const handleNewConversation = async () => {
+    setErrorMessage(null);
+    setIsLoadingSessions(true);
+    const currentFile = store.getCurrentFile();
+    try {
+      const created = await createChatSessionRequest(
+        currentFile ? `Debugging ${currentFile.fileName}` : "Debugging session",
+        currentFile?.id,
+      );
+      setActiveSessionId(created.id);
+      setSessionList((previous) => [
+        created,
+        ...previous.filter((session) => session.id !== created.id),
+      ]);
+      syncStoredSession(created.id);
+      setMessages([
+        {
+          id: "welcome",
+          text: defaultWelcomeMessage,
+          sender: "buddy",
+          timestamp: new Date(),
+        },
+      ]);
+    } catch {
+      setErrorMessage("A new conversation could not be created.");
+    } finally {
+      setIsLoadingSessions(false);
+    }
+  };
+
+  const handleSessionSelect = async (sessionId: number) => {
+    setErrorMessage(null);
+    setIsLoadingSessions(true);
+    try {
+      await loadSessionHistory(sessionId);
+      setActiveSessionId(sessionId);
+      syncStoredSession(sessionId);
+    } catch {
+      setErrorMessage("The selected conversation could not be reopened.");
+    } finally {
+      setIsLoadingSessions(false);
+    }
   };
 
   const sendMessage = async (text: string) => {
-    if (!text.trim() || isSending) return;
+    if (!text.trim() || isSending || isLoadingSessions) return;
+
+    const trimmedText = text.trim();
+    setErrorMessage(null);
     setIsSending(true);
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text,
-      sender: 'user',
-      timestamp: new Date()
+      text: trimmedText,
+      sender: "user",
+      timestamp: new Date(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
-    setInputText('');
+    setMessages((previous) => [...previous, userMessage]);
+    setInputText("");
 
     try {
-      let currentFile = store.getCurrentFile();
-      if (currentFile) {
-        try {
-          await store.refreshCurrentFileAnalysis(currentFile.id);
-        } catch (error) {
-          if (!(error instanceof ApiRequestError && error.status === 404)) throw error;
-        }
-        currentFile = store.getCurrentFile();
+      const sessionId = await ensureSession();
+      const response = await sendChatSessionMessageRequest(
+        sessionId,
+        trimmedText,
+        explanationMode,
+      );
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: (Date.now() + 1).toString(),
+          text: response.message,
+          sender: "buddy",
+          timestamp: new Date(),
+        },
+      ]);
+      try {
+        setSessionList(await getChatSessionsRequest());
+      } catch {
+        /* The reply is already saved. */
       }
-      const currentFileId = currentFile ? Number(currentFile.id) : null;
-      let activeSessionId = sessionId;
-      if (activeSessionId !== null && sessionFileId !== currentFileId) {
-        try {
-          const session = await createChatSessionRequest(
-            currentFile ? `Debugging ${currentFile.fileName}` : 'Debugging session',
-            currentFile?.id,
-          );
-          activeSessionId = session.id;
-          setSessionId(session.id);
-          setSessionFileId(currentFileId);
-        } catch {
-          activeSessionId = null;
-          setSessionId(null);
-          setSessionFileId(null);
-        }
+      if (!activeSessionId) {
+        setActiveSessionId(sessionId);
+        syncStoredSession(sessionId);
       }
-      const response = activeSessionId !== null
-        ? await sendChatSessionMessageRequest(activeSessionId, text, explanationMode)
-        : await sendChatMessageRequest(text, currentFile?.id, explanationMode);
-      setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        text: response.message,
-        sender: 'buddy',
-        timestamp: new Date(),
-      }]);
     } catch (error) {
-      setMessages(prev => [...prev, {
-        id: `error-${Date.now()}`,
-        text: "Debug Buddy couldn't reach the server - try again",
-        sender: 'buddy',
-        timestamp: new Date(),
-      }]);
+      const fallbackMessage =
+        error instanceof ApiRequestError
+          ? error.message
+          : "Debug Buddy could not send the request. Please try again.";
+      setMessages((previous) => [
+        ...previous,
+        {
+          id: `error-${Date.now()}`,
+          text: `Debug Buddy could not complete that request: ${fallbackMessage}`,
+          sender: "buddy",
+          timestamp: new Date(),
+        },
+      ]);
+      setInputText(trimmedText);
+      setErrorMessage(
+        "The request could not be completed. Your draft is available below to retry.",
+      );
     } finally {
       setIsSending(false);
     }
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    sendMessage(inputText);
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
+    void sendMessage(inputText);
   };
 
-  return (
-    <div className="max-w-4xl mx-auto space-y-6">
-      <div className="bg-white rounded-xl shadow-md overflow-hidden">
-        {/* Header */}
-        <div className="bg-gradient-to-r from-purple-600 to-pink-500 p-6 text-white">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-white/20 rounded-full flex items-center justify-center">
-              <Sparkles className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-xl font-bold">Debug Buddy</h2>
-              <p className="text-sm text-white/90">Your AI debugging assistant</p>
-            </div>
-          </div>
-        </div>
+  const busy = isSending || isLoadingSessions;
+  const activeSession = sessionList.find(
+    (session) => session.id === activeSessionId,
+  );
 
-        {/* Quick Actions */}
-        <div className="p-4 bg-gray-50 border-b">
-          <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-            <p className="text-sm text-gray-600">Quick Actions:</p>
-            <label className="flex items-center gap-2 text-sm text-gray-700">
-              <span>Explanation level</span>
-              <select
-                value={explanationMode}
-                onChange={(event) => {
-                  const mode = event.target.value as ExplanationMode;
-                  setExplanationMode(mode);
-                  store.setExplanationMode(mode);
-                }}
-                className="px-3 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500"
-              >
-                <option value="beginner">Beginner</option>
-                <option value="intermediate">Intermediate</option>
-                <option value="advanced">Advanced</option>
-              </select>
-            </label>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+  return (
+    <div className={`chat-page ${embedded ? "chat-embedded" : ""}`}>
+      {!embedded && (
+        <div className="page-eyebrow">
+          <span className="accent-dot" /> A LITTLE MORE CLARITY
+        </div>
+      )}
+      <div className="chat-heading">
+        <h1>
+          <button
+            className="buddy-logo"
+            aria-label="About Debug Buddy"
+            aria-expanded={showAbout}
+            onClick={() => setShowAbout(!showAbout)}
+          >
+            <Sparkles size={25} />
+          </button>{" "}
+          Debug Buddy
+        </h1>
+        <p className="muted">Your space to think through the code.</p>
+        {showAbout && (
+          <p className="brand-about-inline">
+            Ask about an error, explore a suggestion, or choose an explanation
+            level. Conversations are saved to your account.
+          </p>
+        )}
+      </div>
+      <section className="panel chat-surface">
+        <div className="chat-session-bar">
+          <label className="session-picker">
+            Conversation
+            <select
+              className="field"
+              aria-label="Conversation"
+              value={activeSessionId ?? ""}
+              disabled={busy}
+              onChange={(event) =>
+                void handleSessionSelect(Number(event.target.value))
+              }
+            >
+              <option value="" disabled>
+                {isLoadingSessions
+                  ? "Loading conversations…"
+                  : "Start a conversation"}
+              </option>
+              {sessionList
+                .filter(
+                  (session) =>
+                    !embedded ||
+                    session.file_id === Number(store.getCurrentFile()?.id),
+                )
+                .map((session) => (
+                  <option key={session.id} value={session.id}>
+                    {session.title || "Debugging session"} · {session.id}
+                  </option>
+                ))}
+            </select>
+          </label>
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() => void handleNewConversation()}
+          >
+            <RotateCcw size={15} /> New chat
+          </button>
+        </div>
+        <p className="chat-context">
+          {activeSession?.file_id
+            ? `Using saved file context · File ${activeSession.file_id}`
+            : !activeSessionId && store.getCurrentFile()
+              ? `Next conversation: ${store.getCurrentFile()?.fileName}`
+              : "General conversation"}
+        </p>
+        <div className="chat-controls">
+          <div className="quick-actions">
             {quickActions.map((action) => (
               <button
                 key={action.text}
+                className="quick-action"
+                disabled={busy}
                 onClick={() => handleQuickAction(action.text)}
-                className={`flex items-center gap-2 px-3 py-2 bg-white rounded-lg hover:shadow-md transition-all border ${actionStyles[action.color].button}`}
               >
-                <action.icon className={`w-4 h-4 ${actionStyles[action.color].icon}`} />
-                <span className="text-sm font-medium text-gray-700">{action.text}</span>
+                <action.icon size={14} />
+                {action.text}
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Messages */}
-        <div className="p-6 space-y-4 min-h-[400px] max-h-[500px] overflow-y-auto">
-          {messages.map((message) => (
-            <div
-              key={message.id}
-              className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+          <label className="level-picker">
+            Explanation level
+            <select
+              className="field"
+              value={explanationMode}
+              onChange={(event) => {
+                const mode = event.target.value as ExplanationMode;
+                try {
+                  store.setExplanationMode(mode);
+                  setExplanationMode(mode);
+                } catch {
+                  setErrorMessage(
+                    "Could not save your explanation preference.",
+                  );
+                }
+              }}
             >
+              <option value="beginner">Beginner</option>
+              <option value="intermediate">Intermediate</option>
+              <option value="advanced">Advanced</option>
+            </select>
+          </label>
+        </div>
+        <div
+          ref={thread}
+          className="chat-thread space-y-4"
+          role="log"
+          aria-label="Conversation messages"
+          aria-live="polite"
+        >
+          {messages.filter(message => message.id !== "welcome" || messages.length === 1).map((message) =>
+            message.id === "welcome" ? (
+              <div className="chat-empty" key={message.id}>
+                <span className="chat-empty-icon">
+                  <Sparkles size={27} />
+                </span>
+                <h2>Let’s make sense of it.</h2>
+                <p>Ask about a line, explore a fix, or talk through an idea.</p>
+                <small>Your conversation stays in your history.</small>
+              </div>
+            ) : (
               <div
-                className={`max-w-[80%] rounded-2xl p-4 ${
-                  message.sender === 'user'
-                    ? 'bg-gradient-to-r from-purple-600 to-pink-500 text-white'
-                    : 'bg-gray-100 text-gray-900'
-                }`}
+                key={message.id}
+                className={`chat-message ${message.sender === "user" ? "chat-user" : ""}`}
               >
-                {message.sender === 'buddy' && (
-                  <div className="flex items-center gap-2 mb-2">
-                    <Sparkles className="w-4 h-4 text-purple-600" />
-                    <span className="font-medium text-sm text-purple-600">Debug Buddy</span>
-                  </div>
-                )}
-                <p className="whitespace-pre-line">{message.text}</p>
-                <p className={`text-xs mt-2 ${
-                  message.sender === 'user' ? 'text-white/70' : 'text-gray-500'
-                }`}>
-                  {message.timestamp.toLocaleTimeString()}
-                </p>
+                <strong>
+                  {message.sender === "user" ? "You" : "Debug Buddy"}
+                </strong>
+                <Answer text={message.text} />
               </div>
-            </div>
-          ))}
+            ),
+          )}
           {isSending && (
-            <div className="flex justify-start" role="status" aria-live="polite">
-              <div className="max-w-[80%] rounded-2xl bg-gray-100 text-gray-900 p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Sparkles className="w-4 h-4 text-purple-600" />
-                  <span className="font-medium text-sm text-purple-600">Debug Buddy</span>
-                </div>
-                <p>typing...</p>
-              </div>
-            </div>
+            <p role="status" className="muted">
+              Debug Buddy is working…
+            </p>
           )}
         </div>
-
-        {/* Input */}
-        <form onSubmit={handleSubmit} className="p-4 bg-gray-50 border-t">
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              placeholder="Ask Debug Buddy anything..."
-              className="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500"
-            />
-            <button
-              type="submit"
-              disabled={isSending}
-              className="px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-500 text-white rounded-xl hover:shadow-lg transition-all flex items-center gap-2"
-            >
-              <Send className="w-5 h-5" />
-              Send
-            </button>
-          </div>
+        {errorMessage && (
+          <p role="alert" className="error-message">
+            {errorMessage}
+          </p>
+        )}
+        <form
+          onSubmit={handleSubmit}
+          className="chat-composer flex gap-3 items-end"
+        >
+          <textarea
+            aria-label="Message Debug Buddy"
+            className="field"
+            rows={3}
+            value={inputText}
+            onChange={(event) => setInputText(event.target.value)}
+            placeholder="Ask a question or paste code…"
+            disabled={busy}
+          />
+          <button
+            className="button"
+            type="submit"
+            disabled={busy || !inputText.trim()}
+          >
+            <Send size={17} />
+            Send
+          </button>
         </form>
-      </div>
+      </section>
+    </div>
+  );
+}
+
+function Answer({ text }: { text: string }) {
+  return (
+    <div className="answer-text">
+      {text.split(/(```[\s\S]*?```)/g).map((part, index) =>
+        part.startsWith("```") ? (
+          <pre className="code-block" key={index}>
+            <code>{part.slice(3, -3).replace(/^[a-zA-Z0-9_+#.-]*\n/, "")}</code>
+          </pre>
+        ) : (
+          <p className="whitespace-pre-wrap break-words" key={index}>
+            {part}
+          </p>
+        ),
+      )}
     </div>
   );
 }

@@ -37,12 +37,19 @@ export interface ApiAnalysisJob {
   result_summary?: string;
 }
 
+export interface ApiFinding {
+  line: number;
+  message: string;
+  suggestion: string;
+  severity: string;
+}
+
 export interface ApiAnalysisResult {
   file_id: number;
   language: string;
   error_count: number;
   status: string;
-  errors: Array<{ line: number; message: string; suggestion: string; severity: string }>;
+  errors: ApiFinding[];
 }
 
 export interface ApiAnalysisSummary {

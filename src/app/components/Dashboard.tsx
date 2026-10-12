@@ -1,146 +1,187 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
-import { store } from '../store';
-import { Upload, History, FileText, TrendingUp, CheckCircle, AlertCircle } from 'lucide-react';
-
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router";
+import {
+  ArrowUpRight,
+  ArrowRight,
+  FileCode2,
+  CheckCircle2,
+  ScanLine,
+  Sparkles,
+  Upload,
+  History,
+} from "lucide-react";
+import { store } from "../store";
 export default function Dashboard() {
   const navigate = useNavigate();
   const user = store.getCurrentUser();
-  const isAdmin = store.isAdmin();
   const [files, setFiles] = useState(store.getAnalyzedFiles());
-  const recentFiles = files.slice(0, 3);
-
   useEffect(() => {
-    void store.hydrateRemoteFiles().then(() => setFiles(store.getAnalyzedFiles()));
+    void store
+      .hydrateRemoteFiles()
+      .then(() => setFiles(store.getAnalyzedFiles()));
   }, []);
-
+  const scanned = files.filter((f) =>
+    ["Clean", "Errors Found", "Findings Found"].includes(f.status),
+  );
   return (
-    <div className="space-y-6">
-      {/* Welcome Card */}
-      <div className="bg-gradient-to-r from-purple-600 to-pink-500 rounded-2xl p-8 text-white shadow-xl">
-        <h1 className="text-3xl font-bold mb-2">
-          Welcome back, {user?.name}! {isAdmin && '👑'}
-        </h1>
-        <p className="text-white/90">
-          Ready to debug some code? Let's make your programming journey smoother.
-        </p>
+    <div className="dashboard-page">
+      <div className="page-eyebrow">
+        <span className="accent-dot" />
+        YOUR DEBUGGING WORKSPACE
       </div>
-
-      {recentFiles.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-purple-200 bg-purple-50 px-5 py-4 text-sm text-purple-800">
-          No debugging sessions yet. Upload a file to get started and build your analysis history.
+      <section className="welcome-section">
+        <div>
+          <h1>
+            Good code starts with
+            <br />
+            <em>a little understanding.</em>
+          </h1>
+          <p>
+            Welcome back, {user?.name?.split(" ")[0]}. Let’s work through it,
+            one line at a time.
+          </p>
         </div>
-      )}
-
-      {/* Quick Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white rounded-xl p-6 shadow-md">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-              <FileText className="w-6 h-6 text-purple-600" />
-            </div>
-            <TrendingUp className="w-5 h-5 text-green-500" />
-          </div>
-          <div className="text-2xl font-bold text-gray-900">{recentFiles.length}</div>
-          <div className="text-sm text-gray-600">Files Analyzed</div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-md">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-600" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-gray-900">
-            {recentFiles.filter(f => f.errorCount === 0).length}
-          </div>
-          <div className="text-sm text-gray-600">Error-Free Files</div>
-        </div>
-
-        <div className="bg-white rounded-xl p-6 shadow-md">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-red-100 rounded-xl flex items-center justify-center">
-              <AlertCircle className="w-6 h-6 text-red-600" />
-            </div>
-          </div>
-          <div className="text-2xl font-bold text-gray-900">
-            {recentFiles.reduce((sum, f) => sum + f.errorCount, 0)}
-          </div>
-          <div className="text-sm text-gray-600">Total Errors Fixed</div>
-        </div>
-      </div>
-
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         <button
-          onClick={() => navigate('/dashboard/upload')}
-          className="bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all text-left group"
+          className="button"
+          onClick={() => navigate("/dashboard/upload")}
         >
-          <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <Upload className="w-6 h-6 text-purple-600" />
-          </div>
-          <h3 className="font-bold text-gray-900 mb-2">Upload Code</h3>
-          <p className="text-sm text-gray-600">Upload and analyze your Python, Java, or C# files</p>
+          <PlusIcon />
+          New analysis
         </button>
-
+      </section>
+      <div className="dashboard-actions">
         <button
-          onClick={() => navigate('/dashboard/history')}
-          className="bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all text-left group"
+          className="action-feature"
+          onClick={() => navigate("/dashboard/upload")}
         >
-          <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <History className="w-6 h-6 text-blue-600" />
+          <div className="action-icon">
+            <Upload size={23} />
           </div>
-          <h3 className="font-bold text-gray-900 mb-2">Error History</h3>
-          <p className="text-sm text-gray-600">View your past debugging sessions</p>
+          <ArrowUpRight className="action-arrow" size={20} />
+          <h2>Bring your code.</h2>
+          <p>
+            Upload a Python, Java, or C# file.
+            <br />
+            We’ll help you find the next step.
+          </p>
+          <span className="action-link">
+            Start debugging <ArrowRight size={16} />
+          </span>
+          <span className="language-tags">
+            <span>Python</span>
+            <span>Java</span>
+            <span>C#</span>
+          </span>
         </button>
-
         <button
-          onClick={() => navigate('/dashboard/reports')}
-          className="bg-white rounded-xl p-6 shadow-md hover:shadow-xl transition-all text-left group"
+          className="action-feature action-chat"
+          onClick={() => navigate("/dashboard/chat")}
         >
-          <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-            <FileText className="w-6 h-6 text-green-600" />
+          <div className="action-icon">
+            <Sparkles size={23} />
           </div>
-          <h3 className="font-bold text-gray-900 mb-2">Generate Report</h3>
-          <p className="text-sm text-gray-600">Create detailed debugging reports</p>
+          <ArrowUpRight className="action-arrow" size={20} />
+          <h2>Talk it through.</h2>
+          <p>
+            Ask Debug Buddy for an explanation,
+            <br />a code review, or ideas for your next test.
+          </p>
+          <span className="action-link">
+            Open a conversation <ArrowRight size={16} />
+          </span>
+          <span className="quiet-caption">
+            Your questions. A little more clarity.
+          </span>
         </button>
       </div>
-
-      {/* Recent Sessions */}
-      {recentFiles.length > 0 && (
-        <div className="bg-white rounded-xl p-6 shadow-md">
-          <h3 className="font-bold text-gray-900 mb-4">Recent Debugging Sessions</h3>
-          <div className="space-y-3">
-            {recentFiles.map((file) => (
+      <section className="stats-strip" aria-label="Your analysis statistics">
+        {[
+          { icon: FileCode2, label: "Files analyzed", value: scanned.length },
+          {
+            icon: CheckCircle2,
+            label: "Scans with no findings",
+            value: scanned.filter((f) => f.status === "Clean").length,
+          },
+          {
+            icon: ScanLine,
+            label: "Findings detected",
+            value: scanned.reduce((sum, f) => sum + f.findingCounts.total, 0),
+          },
+        ].map((s) => (
+          <div className="stat" key={s.label}>
+            <s.icon size={18} />
+            <strong>{s.value}</strong>
+            <span>{s.label}</span>
+          </div>
+        ))}
+      </section>
+      <section className="recent-section">
+        <div className="section-heading">
+          <div>
+            <h2>Pick up where you left off</h2>
+            <p className="muted">Your latest files and findings.</p>
+          </div>
+          <button
+            className="text-button"
+            onClick={() => navigate("/dashboard/history")}
+          >
+            View history <ArrowRight size={15} />
+          </button>
+        </div>
+        {!files.length ? (
+          <div className="empty-state">
+            <History size={27} />
+            <h3>A fresh start.</h3>
+            <p>Your recent work will appear here after your first upload.</p>
+            <button
+              className="text-button"
+              onClick={() => navigate("/dashboard/upload")}
+            >
+              Upload your first file <ArrowRight size={15} />
+            </button>
+          </div>
+        ) : (
+          <div className="recent-list">
+            {files.slice(0, 5).map((f) => (
               <button
-                key={file.id}
+                key={f.id}
+                className="recent-row"
                 onClick={() => {
-                  store.setCurrentFile(file);
-                  navigate('/dashboard/error-analysis');
+                  store.setCurrentFile(f);
+                  navigate("/dashboard/error-analysis");
                 }}
-                className="w-full flex items-center justify-between p-4 bg-gray-50 rounded-xl hover:bg-gray-100 transition-all"
               >
-                <div className="flex items-center gap-3">
-                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${
-                    file.errorCount === 0 ? 'bg-green-100' : 'bg-red-100'
-                  }`}>
-                    <FileText className={`w-5 h-5 ${
-                      file.errorCount === 0 ? 'text-green-600' : 'text-red-600'
-                    }`} />
-                  </div>
-                  <div className="text-left">
-                    <div className="font-medium text-gray-900">{file.fileName}</div>
-                    <div className="text-sm text-gray-600">
-                      {file.language} • {file.errorCount} errors
-                    </div>
-                  </div>
-                </div>
-                <div className="text-sm text-gray-500">{file.uploadDate}</div>
+                <span className="file-icon">
+                  <FileCode2 size={20} />
+                </span>
+                <span className="recent-file">
+                  <strong>{f.fileName}</strong>
+                  <small>
+                    {f.language} · {f.uploadDate}
+                  </small>
+                </span>
+                <span
+                  className={`status-pill ${f.findingCounts.total ? "has-findings" : ""}`}
+                >
+                  {f.findingCounts.total
+                    ? `${f.findingCounts.total} finding${f.findingCounts.total === 1 ? "" : "s"}`
+                    : f.status === "Clean"
+                      ? "No findings"
+                      : f.status}
+                </span>
+                <ArrowUpRight size={17} />
               </button>
             ))}
           </div>
-        </div>
-      )}
+        )}
+      </section>
     </div>
+  );
+}
+function PlusIcon() {
+  return (
+    <span aria-hidden="true" style={{ fontSize: 20, lineHeight: 1 }}>
+      +
+    </span>
   );
 }
